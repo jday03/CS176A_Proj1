@@ -27,10 +27,8 @@ void sendFile(FILE* file, int socketDescriptor){
 size_t size=output.length();
 
 
-    const size_t sendSize = 60;
+    const size_t sendSize = 1000;
     const size_t firstBufferSize = sendSize+1;
-    char* firstBuffer = new char[firstBufferSize];
-    char* buffer =new char[sendSize];
 
     // ASSUMING TEMPORARILY THAT SINGLE DIGIT MESSAGES
     int messages = size/sendSize;
@@ -50,50 +48,100 @@ size_t size=output.length();
 
     int messagesTotal = messages;
 
+    int lowerBound = 0;
+    int upperBound = firstBufferSize;
+    std::cout<< "lower bound is: " << lowerBound<< " and upper bound is: " << upperBound << std::endl;
     std::string toBeSent1 = output.substr(0,firstBufferSize);
-    if (send(socketDescriptor, output.substr(0,firstBufferSize).c_str(), (size_t) (firstBufferSize), 0) < 0) {
-        printf("\nsend Failed \n");
+    std::cout<< "message is: " << toBeSent1<< std::endl;
+
+    if(messages > 1) {
+    if (send(socketDescriptor, output.substr(0, firstBufferSize).c_str(), (size_t) (firstBufferSize), 0) < 0) {
+        printf("File transmission failed. \n");
         exit(1);
+
     }
+        messages--;
 
+    while (messages > 1) {
+        lowerBound = firstBufferSize + (messagesTotal - messages - 1) * sendSize;
+        upperBound = firstBufferSize + (messagesTotal - messages) * sendSize;
 
-    messages--;
-    while(messages > 1) {
+        std::cout << "lower bound is: " << lowerBound << " and upper bound is: " << upperBound << std::endl;
 
-        std::string toBeSent = output.substr(firstBufferSize+(messagesTotal-messages-1)*sendSize,firstBufferSize+(messagesTotal-messages)*sendSize);
-        if (send(socketDescriptor, output.substr(firstBufferSize+(messagesTotal-messages-1)*sendSize,firstBufferSize+(messagesTotal-messages)*sendSize).c_str(), (size_t) (sendSize* sizeof(char)), 0) < 0) {
-            printf("\nsend Failed \n");
+        std::string toBeSent = output.substr(lowerBound,
+                                             upperBound);
+        std::cout << "message is: " << toBeSent << std::endl;
+
+        if (send(socketDescriptor, output.substr(lowerBound,upperBound).c_str(),
+                 (size_t) (sendSize * sizeof(char)), 0) < 0) {
+            printf("File transmission failed. \n");
             exit(1);
         }
         messages--;
 
     }
-    if(messages == 1){
-        std::string toBeSent = output.substr(firstBufferSize+(messagesTotal-messages-1)*sendSize,firstBufferSize+(messagesTotal-messages)*sendSize);
-        int lowerBound = firstBufferSize+(messagesTotal-messages)*sendSize;
-        int upperBound = output.length();
-        if (send(socketDescriptor, output.substr(firstBufferSize+(messagesTotal-messages-1)*sendSize,output.length()).c_str(), (size_t) (sendSize* sizeof(char)), 0) < 0) {
-            printf("\nsend Failed \n");
+    if (messages == 1) {
+        lowerBound = firstBufferSize + (messagesTotal - messages - 1) * sendSize;
+        upperBound = output.length()+5;
+
+
+        std::string toBeSent = output.substr(lowerBound,
+                                             upperBound);
+        std::cout << "message is: " << toBeSent << std::endl;
+        std::cout << "message length is: " << toBeSent.length() << std::endl;
+
+        std::cout << "lower bound is: " << lowerBound << " and upper bound is: " << upperBound << std::endl;
+
+
+        std::cout <<std::endl << std::endl<< output<< std::endl;
+        if (send(socketDescriptor, output.substr(lowerBound,
+                                                 upperBound).c_str(), (size_t) (sendSize * sizeof(char)), 0) <
+            0) {
+            printf("File transmission failed. \n");
             exit(1);
         }
 
     }
+}
+//if there is only one message to send
+     else{
+
+    lowerBound = 0;
+    upperBound = output.length()-1;
+        std::string toBeSent = output.substr(lowerBound,upperBound);
+    std::cout << "message is: " << toBeSent << std::endl;
+    std::cout << "message length is: " << toBeSent.length() << std::endl;
+
+    std::cout << "lower bound is: " << lowerBound << " and upper bound is: " << upperBound << std::endl;
+
+    std::cout << "lower bound is: " << lowerBound << " and upper bound is: " << upperBound << std::endl;
+    if (send(socketDescriptor, output.substr(lowerBound, upperBound).c_str(), (size_t) (sendSize * sizeof(char)), 0) <
+        0) {
+        printf("\nsend Failed \n");
+        exit(1);
+    }
+
+}
 
 }
 
 
-int main() {
+int main(int argc, char *argv[]) {
 
 
 
 
     int socketIdentifier;
-    const int port = 8080;
+    std::string portText(argv[1]);
+    const int port = std::stoi(portText);
+    if(port > 65535){
+        printf ("Invalid port number.\n");
+        exit(1);
+    }
     int opt = 1;
     struct sockaddr_in address;
 
-
-    socketIdentifier = socket(AF_INET, SOCK_STREAM, 0);
+    socketIdentifier = socket(AF_INET, SOCK_DGRAM, 0);
 
     if(socketIdentifier < 0){
         printf ("socket creation failure\n");
@@ -143,7 +191,7 @@ int main() {
 
         char command[3000];
         if (recv(new_socket, &command, sizeof(command), 0) < 0) {
-            printf("receive failure\n");
+            printf("Failed getting instructions from the client. \n");
             exit(1);
         }
 

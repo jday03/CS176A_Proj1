@@ -12,70 +12,75 @@
 #include <iostream>
 #define PORT 8080
 
-
-class string;
-
 void askUser(int *port, char* address, char* command ){
-    //  printf("Enter server name or IP address: ");
-    //  scanf("%s", address);
+      printf("Enter server name or IP address: ");
+      scanf("%s", address);
 
-    //  printf("Enter port:");
-    //  scanf("%d", port);
-    printf("Enter command:");
-    //scanf("%s", command);
+      printf("Enter port:");
     size_t comSize = 200 * sizeof(char);
+
+std::cin>>*port;
+
+    printf("Enter command:");
+    std::cin.ignore();
     getline(&command,&comSize,stdin);
+
+    if(*port > 65535){
+        printf ("Invalid port number.\n");
+        exit(1);
+    }
 
 }
 
-void receiveFile(int socketDescriptor, std::string fileName){
+void receiveFile(int socketDescriptor,std::string fileName){
+    int messagesReceived = 1;
     std::cout << "receiving file";
-    FILE * newFile= fopen(fileName.c_str(),"w");
-
+    //
     int messagesRemaining;
-    const int bufferSize= 60;
+    const int bufferSize= 1000;
     const int firstBufferSize = bufferSize+1;
-    char* buffer=new char[firstBufferSize];
+    char* initialBuffer=new char[firstBufferSize];
 
 
-    if(recv(socketDescriptor,buffer,bufferSize*sizeof(char) , 0) < 0){
+    if(recv(socketDescriptor,initialBuffer,firstBufferSize , 0) < 0){
         printf ("receive failure\n");
         exit(1);
     }
 
 
+    std::string fullBuffer(initialBuffer);
+    messagesRemaining = (int)initialBuffer[0];
+    fullBuffer=fullBuffer.substr(1,fullBuffer.length());
 
-    messagesRemaining = (int)buffer[0];
-    char* fullBuffer = new char[messagesRemaining*bufferSize];
-
-    for(int i = 0;i < bufferSize;++i ){
-        fullBuffer[i]=buffer[i+1];
-    }
-
-    delete[] buffer;
-
-    buffer = new char[bufferSize];
 
     int messagesTotal = messagesRemaining;
     --messagesRemaining;
     while(messagesRemaining > 0){
+        char buffer[bufferSize];
+        std::cout<< "message is currently: " << fullBuffer << std::endl;
 
-        if(recv(socketDescriptor,buffer,bufferSize*sizeof(char) , 0) < 0){
+        if(recv(socketDescriptor,buffer,bufferSize, 0) < 0){
             printf ("receive failure\n");
             exit(1);
         }
-
-        for(int i = 0;i < bufferSize;++i ){
-            int item = bufferSize*(messagesTotal-messagesRemaining)+i;
-            fullBuffer[bufferSize*(messagesTotal-messagesRemaining)+i]=buffer[i];
+        std::string buffStr (buffer);
+        int offset = 2;
+        if(messagesRemaining == 1){
+            offset = 1;
         }
+        buffStr=buffStr.substr(0,buffStr.length()-offset);
+        fullBuffer.append(buffStr);
 
-        --messagesRemaining;
+               --messagesRemaining;
+        messagesReceived++;
     }
     std::cout<< "message is: " << fullBuffer << std::endl;
 
-    fprintf(newFile,"%s",fullBuffer);
-fclose(newFile);
+    FILE * newFile= fopen(fileName.c_str(),"w");
+    fprintf(newFile,"%s",fullBuffer.c_str());
+    fclose(newFile);
+    std::cout<< "File "<< fileName<< " saved.";
+
 }
 //assuming that buffer is empty
 
@@ -92,7 +97,9 @@ char* parseCommand(char*command, std::string& file){
         output[count] = command[count];
     }
 
-    file= parse.substr(index+1,parse.length());
+    char* newParse = strtok((char*)parse.c_str(), "\n");
+
+    file= std::string(newParse).substr(index+1,parse.length());
     return output;
 }
 
@@ -103,7 +110,6 @@ int main() {
     char* addressInput = (char*)malloc(100* sizeof(char));
     char* command = (char*)malloc(200* sizeof(char));
     askUser(port,addressInput,command);
-    *port = 8080;
 
     int socketIdentifier;
     struct sockaddr_in address;
@@ -112,7 +118,7 @@ int main() {
     socketIdentifier = socket(AF_INET, SOCK_STREAM, 0);
 
     if(socketIdentifier < 0){
-        printf ("socket creation failure\n");
+        printf ("Could not connect to server.\n");
         exit(1);
     }
 
@@ -121,7 +127,7 @@ int main() {
 
     if(inet_pton(AF_INET, "127.0.0.1", &address.sin_addr)<=0)
     {
-        printf("Invalid address \n");
+        printf("Could not connect to server. \n");
         exit(1);
     }
 
@@ -136,19 +142,22 @@ std::cout<< fileName << std::endl;
 
     if (connect(socketIdentifier, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
-        printf("\nConnection Failed \n");
+        printf("Could not connect to server. \n");
         exit(1);
     }
 
 
     if(send(socketIdentifier ,(char*) command,(size_t) 200* sizeof(*command) , 0 ) < 0){
-        printf("\nsend Failed \n");
+        printf("Failed to send command. Terminating. \n");
         exit(1);
 
     }
 
     receiveFile(socketIdentifier,fileName);
-/*    if(recv(socketIdentifier,  &file, 200*sizeof(file), 0) < 0){
+
+
+/*
+    if(recv(socketIdentifier,  &file, 200*sizeof(file), 0) < 0){
         printf ("receive failure\n");
         exit(1);
     }
